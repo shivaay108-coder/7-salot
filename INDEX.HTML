@@ -1,0 +1,761 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SEVENTH SLOT</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#050814;color:white;
+ font-family:Arial,sans-serif;overflow:hidden
+}
+button,input,select{
+ background:#14223b;color:white;border:1px solid #38bdf8;
+ border-radius:10px;padding:10px;margin:4px
+}
+button{cursor:pointer}
+button:hover{background:#075985}
+#home{height:100vh;overflow:auto;text-align:center;padding:15px}
+h1{color:#38bdf8;text-shadow:0 0 20px #0284c7}
+.games{
+ display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
+ gap:12px;max-width:900px;margin:auto
+}
+.card{
+ border:1px solid #164e63;border-radius:15px;
+ background:linear-gradient(145deg,#14213d,#080d1c);
+ padding:12px;cursor:pointer;min-height:150px
+}
+.card:hover{box-shadow:0 0 20px #0891b2;transform:translateY(-2px)}
+.icon{font-size:48px}
+.card h3{font-size:16px}
+#game{display:none}
+canvas{
+ width:100vw;height:100vh;display:block;
+ touch-action:none;background:#071326
+}
+#hud{
+ position:absolute;top:5px;left:0;right:0;
+ text-align:center;pointer-events:none
+}
+#hud button,#hud select,#hud input{pointer-events:auto}
+#controls{
+ position:absolute;bottom:12px;left:0;right:0;
+ display:flex;justify-content:space-around;align-items:center;
+ flex-wrap:wrap
+}
+.control{
+ width:65px;height:58px;font-size:22px;
+ background:#10243dcc;border:1px solid #38bdf8
+}
+#message{
+ position:absolute;top:40%;left:0;right:0;
+ text-align:center;font-size:28px;font-weight:bold;
+ pointer-events:none
+}
+#garage{
+ position:absolute;inset:10%;background:#101b30;
+ border:1px solid #38bdf8;border-radius:15px;
+ padding:15px;display:none;overflow:auto;z-index:5
+}
+@media(max-width:500px){
+ .card{min-height:125px}
+ .icon{font-size:38px}
+}
+</style>
+</head>
+
+<body>
+
+<div id="home">
+<h1>🎮 SEVENTH SLOT</h1>
+<p>Choose your game and start playing!</p>
+
+<div class="games">
+
+<div class="card" onclick="start('pong')">
+<div class="icon">🏓</div>
+<h3>Ping Pong</h3>
+<p>Player vs AI / 2 Players</p>
+</div>
+
+<div class="card" onclick="start('pool')">
+<div class="icon">🎱</div>
+<h3>Pool Game</h3>
+<p>Aim & Shoot</p>
+</div>
+
+<div class="card" onclick="start('night')">
+<div class="icon">🌙</div>
+<h3>Night Werewolf</h3>
+<p>Bed & Monster Defense</p>
+</div>
+
+<div class="card" onclick="start('car')">
+<div class="icon">🏎️</div>
+<h3>Mini Car Combat</h3>
+<p>Racing & Combat</p>
+</div>
+
+<div class="card">
+<div class="icon">🔒</div>
+<h3>Slot 5</h3>
+<p>Coming Soon</p>
+</div>
+
+<div class="card">
+<div class="icon">🔒</div>
+<h3>Slot 6</h3>
+<p>Coming Soon</p>
+</div>
+
+<div class="card">
+<div class="icon">🔒</div>
+<h3>Slot 7</h3>
+<p>Coming Soon</p>
+</div>
+
+</div>
+</div>
+
+<div id="game">
+<canvas id="c"></canvas>
+
+<div id="hud">
+<button onclick="menu()">🏠 Lobby</button>
+<button onclick="pause()">⏸ Pause</button>
+<button onclick="restart()">🔄 Restart</button>
+<button onclick="garage()">🚗 Garage</button>
+<div id="stats"></div>
+</div>
+
+<div id="controls"></div>
+<div id="message"></div>
+</div>
+
+<div id="garage">
+<h2>🏎️ CAR GARAGE</h2>
+<p>Create and customize your car.</p>
+
+<label>Car Color</label>
+<input type="color" id="carColor" value="#00bfff">
+
+<br>
+<label>Car Model</label>
+<select id="carModel">
+<option value="sport">Sports Car</option>
+<option value="racer">Racer</option>
+<option value="muscle">Muscle Car</option>
+</select>
+
+<br>
+<button onclick="buyCar()">Buy Car — 100 Coins</button>
+<button onclick="closeGarage()">Close Garage</button>
+
+<p id="garageInfo"></p>
+</div>
+
+<script>
+const canvas=document.getElementById("c");
+const ctx=canvas.getContext("2d");
+
+let W=innerWidth,H=innerHeight;
+let game="",active=false,paused=false;
+let frame=0,coins=0;
+let score=0;
+let keys={};
+
+function resize(){
+ W=innerWidth;H=innerHeight;
+ canvas.width=W*devicePixelRatio;
+ canvas.height=H*devicePixelRatio;
+ ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+}
+onresize=resize;
+resize();
+
+function start(name){
+ game=name;
+ active=true;paused=false;
+ frame=0;score=0;
+
+ document.getElementById("home").style.display="none";
+ document.getElementById("game").style.display="block";
+ document.getElementById("message").innerText="";
+
+ if(name==="pong")initPong();
+ if(name==="pool")initPool();
+ if(name==="night")initNight();
+ if(name==="car")initCar();
+
+ makeControls();
+ requestAnimationFrame(loop);
+}
+
+function menu(){
+ active=false;
+ document.getElementById("game").style.display="none";
+ document.getElementById("home").style.display="block";
+}
+
+function pause(){paused=!paused}
+function restart(){start(game)}
+
+function loop(){
+ if(!active)return;
+
+ if(!paused){
+  frame++;
+  ctx.clearRect(0,0,W,H);
+
+  if(game==="pong")drawPong();
+  if(game==="pool")drawPool();
+  if(game==="night")drawNight();
+  if(game==="car")drawCar();
+ }
+
+ requestAnimationFrame(loop);
+}
+
+onkeydown=e=>keys[e.key.toLowerCase()]=true;
+onkeyup=e=>keys[e.key.toLowerCase()]=false;
+
+function text(t,x,y,size=20,color="white"){
+ ctx.fillStyle=color;
+ ctx.font="bold "+size+"px Arial";
+ ctx.fillText(t,x,y);
+}
+
+function circle(x,y,r,color){
+ ctx.fillStyle=color;
+ ctx.shadowBlur=12;
+ ctx.shadowColor=color;
+ ctx.beginPath();
+ ctx.arc(x,y,r,0,Math.PI*2);
+ ctx.fill();
+ ctx.shadowBlur=0;
+}
+
+function rect(x,y,w,h,color){
+ ctx.fillStyle=color;
+ ctx.fillRect(x,y,w,h);
+}
+
+function makeControls(){
+ let html="";
+
+ if(game==="pong"){
+ html=`
+ <button class="control" id="up">⬆</button>
+ <button class="control" id="down">⬇</button>
+ <select id="pongMode">
+ <option value="ai">Player vs AI</option>
+ <option value="two">2 Players</option>
+ </select>
+ <input type="number" id="winning" min="1" max="15" value="5">
+ `;
+ }
+
+ if(game==="pool"){
+ html=`
+ <button class="control" id="aimL">◀</button>
+ <button class="control" id="aimR">▶</button>
+ <button class="control" id="shoot">🎱 SHOOT</button>
+ <input type="range" id="power" min="1" max="100" value="50">
+ `;
+ }
+
+ if(game==="night"){
+ html=`
+ <button onclick="bedUpgrade()">🛏️ Bed</button>
+ <button onclick="gateUpgrade()">🚪 Gate</button>
+ <button onclick="weaponUpgrade()">⚔️ Weapon</button>
+ <button onclick="weaponBuy()">➕ Buy Weapon</button>
+ `;
+ }
+
+ if(game==="car"){
+ html=`
+ <button class="control" id="left">◀</button>
+ <button class="control" id="gas">⬆</button>
+ <button class="control" id="right">▶</button>
+ <button class="control" id="brake">⬇</button>
+ <button class="control" id="fire">🔥</button>
+ <button onclick="changeTrack()">🗺️ Track</button>
+ <button onclick="lapChange()">🏁 Laps</button>
+ `;
+ }
+
+ document.getElementById("controls").innerHTML=html;
+
+ bind("up","w");bind("down","s");
+ bind("left","arrowleft");bind("right","arrowright");
+ bind("gas","arrowup");bind("brake","arrowdown");
+ bind("fire"," ");
+
+ bind("aimL","a");bind("aimR","d");
+
+ document.getElementById("shoot")?.addEventListener("click",shootPool);
+ document.getElementById("pongMode")?.addEventListener("change",e=>pongMode=e.target.value);
+ document.getElementById("winning")?.addEventListener("change",e=>{
+  win=Math.max(1,Math.min(15,+e.target.value));
+ });
+ document.getElementById("power")?.addEventListener("input",e=>poolPower=+e.target.value);
+}
+
+function bind(id,key){
+ let el=document.getElementById(id);
+ if(!el)return;
+
+ el.onpointerdown=e=>{e.preventDefault();keys[key]=true};
+ el.onpointerup=()=>keys[key]=false;
+ el.onpointerleave=()=>keys[key]=false;
+}
+
+/* ================= PING PONG ================= */
+
+let p1,p2,b,pongMode="ai",win=5;
+
+function initPong(){
+ p1={x:25,y:H/2-55,w:12,h:110};
+ p2={x:W-37,y:H/2-55,w:12,h:110};
+ b={x:W/2,y:H/2,vx:5,vy:3,r:10};
+ score=0;
+ score2=0;
+}
+
+let score2=0;
+
+function drawPong(){
+ rect(0,0,W,H,"#071326");
+
+ ctx.strokeStyle="#38bdf8";
+ ctx.setLineDash([10,10]);
+ ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.stroke();
+ ctx.setLineDash([]);
+
+ if(keys["w"])p1.y-=6;
+ if(keys["s"])p1.y+=6;
+
+ if(pongMode==="two"){
+  if(keys["arrowup"])p2.y-=6;
+  if(keys["arrowdown"])p2.y+=6;
+ }else{
+  p2.y+=(b.y-p2.y-p2.h/2)*.07;
+ }
+
+ p1.y=Math.max(0,Math.min(H-p1.h,p1.y));
+ p2.y=Math.max(0,Math.min(H-p2.h,p2.y));
+
+ b.x+=b.vx;b.y+=b.vy;
+
+ if(b.y<10||b.y>H-10)b.vy*=-1;
+
+ if(b.x<45&&b.y>p1.y&&b.y<p1.y+p1.h)b.vx=Math.abs(b.vx)*1.04;
+ if(b.x>W-45&&b.y>p2.y&&b.y<p2.y+p2.h)b.vx=-Math.abs(b.vx)*1.04;
+
+ if(b.x<0){score2++;resetPong()}
+ if(b.x>W){score++;resetPong()}
+
+ rect(p1.x,p1.y,p1.w,p1.h,"#22d3ee");
+ rect(p2.x,p2.y,p2.w,p2.h,"#f472b6");
+ circle(b.x,b.y,b.r,"white");
+
+ text(score+" : "+score2,W/2-35,50,28);
+
+ document.getElementById("stats").innerText=
+ "🏓 Ping Pong | Winning Score: "+win;
+
+ if(score>=win||score2>=win){
+  endGame(score>score2?"PLAYER 1 WINS":"PLAYER 2 WINS");
+ }
+}
+
+function resetPong(){
+ b.x=W/2;b.y=H/2;
+ b.vx=Math.random()>.5?5:-5;
+ b.vy=(Math.random()-.5)*6;
+}
+
+/* ================= POOL ================= */
+
+let poolBalls=[],poolPower=50,aimAngle=0;
+
+function initPool(){
+ poolBalls=[];
+ score=0;
+
+ let cx=W/2,cy=H/2;
+
+ for(let i=0;i<10;i++){
+  poolBalls.push({
+   x:cx+60+(i%4)*25,
+   y:cy-40+Math.floor(i/4)*25,
+   vx:0,vy:0,r:11,
+   color=["#ef4444","#facc15","#3b82f6","#fff","#22c55e"][i%5]
+  });
+ }
+
+ poolBalls.push({
+  x:cx-130,y:cy,vx:0,vy:0,r:11,color:"white",cue:true
+ });
+}
+
+function drawPool(){
+ rect(0,0,W,H,"#071326");
+
+ let tw=Math.min(W-30,800);
+ let th=Math.min(H-150,440);
+ let x=(W-tw)/2,y=(H-th)/2;
+
+ rect(x-18,y-18,tw+36,th+36,"#713f12");
+ rect(x,y,tw,th,"#047857");
+
+ let pockets=[
+ [x,y],[x+tw/2,y],[x+tw,y],
+ [x,y+th],[x+tw/2,y+th],[x+tw,y+th]
+ ];
+
+ pockets.forEach(p=>circle(p[0],p[1],17,"#020617"));
+
+ poolBalls.forEach((ball,i)=>{
+  ball.x+=ball.vx;
+  ball.y+=ball.vy;
+  ball.vx*=.985;ball.vy*=.985;
+
+  if(Math.abs(ball.vx)<.05)ball.vx=0;
+  if(Math.abs(ball.vy)<.05)ball.vy=0;
+
+  if(ball.x<x+ball.r||ball.x>x+tw-ball.r)ball.vx*=-.9;
+  if(ball.y<y+ball.r||ball.y>y+th-ball.r)ball.vy*=-.9;
+
+  for(let j=i+1;j<poolBalls.length;j++){
+   let other=poolBalls[j];
+   let dx=other.x-ball.x,dy=other.y-ball.y;
+   let d=Math.hypot(dx,dy);
+
+   if(d<ball.r+other.r&&d>0){
+    let nx=dx/d,ny=dy/d;
+    let v=(ball.vx-other.vx)*nx+(ball.vy-other.vy)*ny;
+
+    ball.vx-=v*nx;ball.vy-=v*ny;
+    other.vx+=v*nx;other.vy+=v*ny;
+   }
+  }
+
+  circle(ball.x,ball.y,ball.r,ball.color);
+ });
+
+ let cue=poolBalls[poolBalls.length-1];
+
+ ctx.strokeStyle="#ffffff99";
+ ctx.beginPath();
+ ctx.moveTo(cue.x,cue.y);
+ ctx.lineTo(cue.x+Math.cos(aimAngle)*100,cue.y+Math.sin(aimAngle)*100);
+ ctx.stroke();
+
+ document.getElementById("stats").innerText=
+ "🎱 Pool | Power "+poolPower;
+}
+
+function shootPool(){
+ let cue=poolBalls[poolBalls.length-1];
+ cue.vx=-Math.cos(aimAngle)*poolPower*.12;
+ cue.vy=-Math.sin(aimAngle)*poolPower*.12;
+}
+
+canvas.addEventListener("pointermove",e=>{
+ if(game==="pool"){
+  let cue=poolBalls[poolBalls.length-1];
+  aimAngle=Math.atan2(e.clientY-cue.y,e.clientX-cue.x);
+ }
+});
+
+/* ================= NIGHT WEREWOLF ================= */
+
+let bed=1,gate=1,weapon=0;
+let gateHP=100,maxHP=100;
+let monsters=[],nightWave=1;
+
+function initNight(){
+ coins=0;bed=1;gate=1;weapon=0;
+ gateHP=100;maxHP=100;
+ monsters=[];nightWave=1;
+}
+
+function bedUpgrade(){
+ let cost=bed*50;
+ if(coins>=cost){coins-=cost;bed++}
+}
+
+function gateUpgrade(){
+ let cost=gate*70;
+ if(coins>=cost){
+  coins-=cost;gate++;
+  maxHP+=100;gateHP=maxHP;
+ }
+}
+
+function weaponBuy(){
+ if(weapon===0&&coins>=100){
+  coins-=100;weapon=1;
+ }
+}
+
+function weaponUpgrade(){
+ let cost=weapon*100;
+ if(weapon>0&&coins>=cost){
+  coins-=cost;weapon++;
+ }
+}
+
+function drawNight(){
+ rect(0,0,W,H,"#030712");
+
+ // Room
+ rect(W*.12,H*.12,W*.76,H*.75,"#172033");
+
+ ctx.strokeStyle="#64748b";
+ ctx.lineWidth=7;
+ ctx.strokeRect(W*.12,H*.12,W*.76,H*.75);
+
+ // Bed
+ rect(W*.25,H*.4,W*.2,H*.22,"#7c3aed");
+ rect(W*.27,H*.42,W*.07,H*.07,"#e9d5ff");
+
+ text("BED LV "+bed,W*.25,H*.37);
+
+ // Gate
+ rect(W*.55,H*.35,W*.14,H*.32,"#92400e");
+ text("GATE LV "+gate,W*.53,H*.32);
+
+ rect(W*.53,H*.28,W*.18,8,"#7f1d1d");
+ rect(W*.53,H*.28,W*.18*(gateHP/maxHP),8,"#22c55e");
+
+ if(weapon>0){
+  circle(W*.60,H*.42,15,weapon>3?"#facc15":"#38bdf8");
+  text("WEAPON LV "+weapon,W*.68,H*.42);
+ }else{
+  text("+",W*.61,H*.44,30,"#38bdf8");
+ }
+
+ if(frame%150===0){
+  monsters.push({x:W*.88,y:H*.5,hp:50+nightWave*10,speed:1+nightWave*.1});
+ }
+
+ monsters.forEach((m,i)=>{
+  m.x-=m.speed;
+
+  if(weapon>0&&frame%30===0)m.hp-=weapon*5;
+  if(m.x<W*.69)gateHP-=.25;
+
+  circle(m.x,m.y,23,"#991b1b");
+  circle(m.x,m.y,9,"#ef4444");
+
+  if(m.hp<=0){
+   monsters.splice(i,1);coins+=10;
+  }
+ });
+
+ if(frame%60===0)coins+=bed;
+ if(frame%1200===0)nightWave++;
+
+ text("🌙 NIGHT "+nightWave,W*.15,H*.2,22);
+ text("COINS: "+coins,W*.15,H*.25,22);
+ text("GATE HEALTH: "+Math.round(gateHP),W*.15,H*.30,18);
+
+ document.getElementById("stats").innerText=
+ "Night Werewolf | Bed "+bed+" | Gate "+gate+" | Weapon "+weapon;
+
+ if(gateHP<=0)endGame("GATE DESTROYED");
+}
+
+/* ================= MINI CAR COMBAT ================= */
+
+let carX=0,carY=0,carSpeed=0;
+let carAngle=0,carColor="#00bfff";
+let laps=1,currentLap=0,track=0;
+let bullets=[],enemyCars=[];
+let carHP=100,carCoins=0;
+
+function initCar(){
+ carX=W/2;carY=H*.75;
+ carSpeed=0;carAngle=0;
+ currentLap=0;laps=1;
+ carHP=100;bullets=[];enemyCars=[];
+ carCoins=0;
+
+ for(let i=0;i<3;i++){
+  enemyCars.push({
+   x:W*.3+i*W*.2,
+   y:H*.25,
+   color:["#ef4444","#facc15","#a855f7"][i],
+   hp:100
+  });
+ }
+}
+
+function changeTrack(){track=(track+1)%3}
+function lapChange(){laps=laps%4+1}
+
+function drawCar(){
+ rect(0,0,W,H,"#071326");
+
+ // Track
+ ctx.fillStyle=["#334155","#475569","#164e63"][track];
+ ctx.beginPath();
+ ctx.ellipse(W/2,H/2,W*.42,H*.42,0,0,Math.PI*2);
+ ctx.fill();
+
+ ctx.fillStyle="#14532d";
+ ctx.beginPath();
+ ctx.ellipse(W/2,H/2,W*.28,H*.28,0,0,Math.PI*2);
+ ctx.fill();
+
+ ctx.strokeStyle="#facc15";
+ ctx.setLineDash([15,15]);
+ ctx.lineWidth=3;
+ ctx.beginPath();
+ ctx.ellipse(W/2,H/2,W*.35,H*.35,0,0,Math.PI*2);
+ ctx.stroke();
+ ctx.setLineDash([]);
+
+ // Enemy Cars
+ enemyCars.forEach(enemy=>{
+  drawCarModel(enemy.x,enemy.y,enemy.color,0);
+ });
+
+ if(keys["arrowup"])carSpeed=Math.min(carSpeed+0.1,5);
+ else carSpeed*=.98;
+
+ if(keys["arrowdown"])carSpeed=Math.max(carSpeed-.15,-2);
+
+ if(keys["arrowleft"])carAngle-=.04;
+ if(keys["arrowright"])carAngle+=.04;
+
+ carX+=Math.cos(carAngle)*carSpeed;
+ carY+=Math.sin(carAngle)*carSpeed;
+
+ carX=Math.max(25,Math.min(W-25,carX));
+ carY=Math.max(25,Math.min(H-25,carY));
+
+ drawCarModel(carX,carY,carColor,carAngle);
+
+ // Bullets
+ bullets.forEach((bullet,i)=>{
+  bullet.x+=bullet.vx;
+  bullet.y+=bullet.vy;
+  circle(bullet.x,bullet.y,5,"#facc15");
+
+  enemyCars.forEach(enemy=>{
+   if(Math.hypot(bullet.x-enemy.x,bullet.y-enemy.y)<35){
+    enemy.hp-=10;
+    bullet.dead=true;
+   }
+  });
+
+  if(bullet.x<0||bullet.x>W||bullet.y<0||bullet.y>H)bullet.dead=true;
+ });
+
+ bullets=bullets.filter(b=>!b.dead);
+
+ enemyCars=enemyCars.filter(e=>e.hp>0);
+
+ if(keys[" " ]&&frame%15===0){
+  bullets.push({
+   x:carX,y:carY,
+   vx:Math.cos(carAngle)*8,
+   vy:Math.sin(carAngle)*8
+  });
+ }
+
+ document.getElementById("stats").innerText=
+ "🏎️ Combat Racing | Speed "+Math.round(carSpeed*20)+
+ " | HP "+carHP+" | Lap "+(currentLap+1)+"/"+laps;
+}
+
+function drawCarModel(x,y,color,angle){
+ ctx.save();
+ ctx.translate(x,y);
+ ctx.rotate(angle);
+
+ // Wheels
+ rect(-22,-19,12,9,"#020617");
+ rect(10,-19,12,9,"#020617");
+ rect(-22,10,12,9,"#020617");
+ rect(10,10,12,9,"#020617");
+
+ // Curved sports car body
+ ctx.fillStyle=color;
+ ctx.beginPath();
+ ctx.moveTo(-30,-12);
+ ctx.quadraticCurveTo(-28,-23,-12,-22);
+ ctx.lineTo(12,-22);
+ ctx.quadraticCurveTo(28,-18,30,-10);
+ ctx.lineTo(30,10);
+ ctx.quadraticCurveTo(25,22,10,22);
+ ctx.lineTo(-12,22);
+ ctx.quadraticCurveTo(-28,20,-30,10);
+ ctx.closePath();
+ ctx.fill();
+
+ // Windshield
+ ctx.fillStyle="#0f172a";
+ ctx.beginPath();
+ ctx.moveTo(-10,-16);
+ ctx.lineTo(12,-16);
+ ctx.lineTo(19,-7);
+ ctx.lineTo(-19,-7);
+ ctx.closePath();
+ ctx.fill();
+
+ ctx.beginPath();
+ ctx.moveTo(-19,7);
+ ctx.lineTo(19,7);
+ ctx.lineTo(12,16);
+ ctx.lineTo(-10,16);
+ ctx.closePath();
+ ctx.fill();
+
+ // Headlights
+ rect(23,-10,7,5,"#fef08a");
+ rect(23,5,7,5,"#fef08a");
+
+ ctx.restore();
+}
+
+/* ================= GARAGE ================= */
+
+function garage(){
+ document.getElementById("garage").style.display="block";
+ document.getElementById("garageInfo").innerText=
+ "Coins: "+carCoins;
+}
+
+function closeGarage(){
+ document.getElementById("garage").style.display="none";
+}
+
+function buyCar(){
+ if(carCoins>=100){
+  carCoins-=100;
+  carColor=document.getElementById("carColor").value;
+  closeGarage();
+ }else{
+  document.getElementById("garageInfo").innerText="Need 100 Coins!";
+ }
+}
+
+/* ================= FINISH ================= */
+
+function endGame(msg){
+ active=false;
+ document.getElementById("message").innerText=msg;
+}
+</script>
+
+</body>
+</html>
