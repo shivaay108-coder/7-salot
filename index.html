@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Night Arcade - 3 Games</title>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#050816;color:white;
+ font-family:Arial,sans-serif;overflow:hidden
+}
+button,input,select{
+ padding:11px;border-radius:10px;border:1px solid #334155;
+ background:#101b30;color:white;margin:4px
+}
+button{cursor:pointer;background:#075985}
+button:hover{background:#0891b2}
+h1{color:#38bdf8;text-shadow:0 0 20px #0284c7}
+#menu{
+ position:absolute;inset:0;overflow:auto;
+ background:radial-gradient(circle,#10213d,#030712);
+ text-align:center;padding:20px
+}
+.games{
+ display:flex;flex-wrap:wrap;justify-content:center;gap:15px
+}
+.gameCard{
+ width:280px;background:#101b30;border:1px solid #155e75;
+ border-radius:18px;padding:15px;cursor:pointer
+}
+.gameCard img{width:100%;height:130px;object-fit:cover;border-radius:12px}
+.gameCard:hover{box-shadow:0 0 25px #0891b2}
+#gameUI{display:none}
+#top{
+ position:absolute;top:5px;left:0;right:0;
+ display:flex;justify-content:center;flex-wrap:wrap;
+ z-index:3;background:#030712cc
+}
+#canvas{
+ width:100vw;height:100vh;display:block;
+ background:#071326;touch-action:none
+}
+#panel{
+ position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+ z-index:3;background:#101b30dd;padding:8px;
+ border-radius:14px;text-align:center;max-width:98%
+}
+#connection{
+ position:absolute;top:65px;right:8px;z-index:4;
+ width:280px;background:#101b30;padding:12px;
+ border-radius:14px;display:none;max-height:80vh;overflow:auto
+}
+#qr{background:white;padding:5px;display:inline-block}
+#msg{color:#67e8f9;font-size:13px}
+</style>
+</head>
+
+<body>
+
+<div id="menu">
+<h1>🌌 NIGHT ARCADE</h1>
+<p>Three Games • Multiplayer • Upgrades</p>
+
+<div class="games">
+
+<div class="gameCard" onclick="startGame('pong')">
+<img src="https://images.unsplash.com/photo-1511512578047-dfb367046420?w=500">
+<h2>🏓 PING PONG</h2>
+<p>Player vs AI / 2 Player</p>
+</div>
+
+<div class="gameCard" onclick="startGame('pool')">
+<img src="https://images.unsplash.com/photo-1608467810191-6d6b3f7d9a30?w=500">
+<h2>🎱 POOL GAME</h2>
+<p>2 Player Billiards</p>
+</div>
+
+<div class="gameCard" onclick="startGame('night')">
+<img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500">
+<h2>🌙 NIGHT WEREWOLF</h2>
+<p>Bed • Gate • Monsters • Weapons</p>
+</div>
+
+</div>
+
+<br>
+<button onclick="showConnection()">🌐 Friend Multiplayer</button>
+<button onclick="toggleSound()">🔊 Sound</button>
+</div>
+
+<div id="gameUI">
+<canvas id="canvas"></canvas>
+
+<div id="top">
+<button onclick="goMenu()">🏠 Menu</button>
+<button onclick="pauseGame()">⏸ Pause</button>
+<button onclick="restartGame()">🔄 Restart</button>
+<button onclick="showConnection()">🌐 Connect Friend</button>
+</div>
+
+<div id="panel">
+<div id="score"></div>
+<div id="controls"></div>
+</div>
+</div>
+
+<div id="connection">
+<h3>🌐 Friend Connection</h3>
+<p id="msg">Create or join a room.</p>
+
+<button onclick="createRoom()">Create Room</button>
+<button onclick="joinRoom()">Join Room</button>
+
+<div id="qr"></div>
+
+<textarea id="signal" placeholder="Paste connection code here"
+style="width:100%;height:100px;background:#071326;color:white"></textarea>
+
+<button onclick="processSignal()">Process Code</button>
+<button onclick="scanQR()">📷 Scan QR</button>
+
+<video id="video" width="240" autoplay playsinline
+style="display:none"></video>
+
+<button onclick="closeConnection()">Close</button>
+</div>
+
+<script>
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
+
+let game="";
+let running=false;
+let paused=false;
+let sound=true;
+
+let mode="ai";
+let winScore=5;
+let score1=0,score2=0;
+
+let W=0,H=0;
+let frame=0;
+
+function resize(){
+ canvas.width=innerWidth*devicePixelRatio;
+ canvas.height=innerHeight*devicePixelRatio;
+ W=canvas.width;H=canvas.height;
+ ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+}
+onresize=resize;
+resize();
+
+function startGame(name){
+ game=name;
+ document.getElementById("menu").style.display="none";
+ document.getElementById("gameUI").style.display="block";
+
+ running=true;paused=false;
+ score1=0;score2=0;
+
+ if(game==="pong")initPong();
+ if(game==="pool")initPool();
+ if(game==="night")initNight();
+
+ requestAnimationFrame(loop);
+}
+
+function goMenu(){
+ running=false;
+ document.getElementById("gameUI").style.display="none";
+ document.getElementById("menu").style.display="block";
+}
+
+function pauseGame(){paused=!paused}
+function restartGame(){startGame(game)}
+function toggleSound(){sound=!sound}
+
+function loop(){
+ if(!running)return;
+ if(!paused){
+  frame++;
+  ctx.clearRect(0,0,innerWidth,innerHeight);
+
+  if(game==="pong")drawPong();
+  if(game==="pool")drawPool();
+  if(game==="night")drawNight();
+ }
+ requestAnimationFrame(loop);
+}
+
+/* ================= PING PONG ================= */
+
+let paddle1,paddle2,ball;
+let keys={};
+
+function initPong(){
+ mode="ai";
+
+ paddle1={x:35,y:innerHeight/2-60,w:12,h:120};
+ paddle2={x:innerWidth-47,y:innerHeight/2-60,w:12,h:120};
+
+ ball={x:innerWidth/2,y:innerHeight/2,
+ vx:5,vy:3,r:12};
+
+ document.getElementById("controls").innerHTML=`
+ <select id="pongMode" onchange="changePongMode(this.value)">
+ <option value="ai">Player vs AI</option>
+ <option value="two">Player vs Player</option>
+ </select>
+ <input id="win" type="number" min="1" max="15" value="5"
+ onchange="winScore=Math.max(1,Math.min(15,+this.value))">
+ <span>Winning Score (1-15)</span>
+ `;
+}
+
+function changePongMode(v){mode=v}
+
+onkeydown=e=>keys[e.key.toLowerCase()]=true;
+onkeyup=e=>keys[e.key.toLowerCase()]=false;
+
+function drawPong(){
+ let h=innerHeight,w=innerWidth;
+
+ if(keys["w"])paddle1.y-=7;
+ if(keys["s"])paddle1.y+=7;
+
+ if(mode==="two"){
+  if(keys["arrowup"])paddle2.y-=7;
+  if(keys["arrowdown"])paddle2.y+=7;
+ }else{
+  paddle2.y+=(ball.y-(paddle2.y+paddle2.h/2))*0.09;
+ }
+
+ paddle1.y=Math.max(0,Math.min(h-paddle1.h,paddle1.y));
+ paddle2.y=Math.max(0,Math.min(h-paddle2.h,paddle2.y));
+
+ ball.x+=ball.vx;
+ ball.y+=ball.vy;
+
+ if(ball.y<ball.r||ball.y>h-ball.r)ball.vy*=-1;
+
+ if(hit(ball,paddle1)||hit(ball,paddle2)){
+  ball.vx*=-1.05;
+  ball.vy+=(Math.random()-.5)*2;
+ }
+
+ if(ball.x<0){
+  score2++;resetBall();
+ }
+ if(ball.x>w){
+  score1++;resetBall();
+ }
+
+ if(score1>=winScore||score2>=winScore){
+  textCenter((score1>score2?"PLAYER 1":"PLAYER 2")+" WINS!");
+  running=false;
+ }
+
+ ctx.fillStyle="#071326";
+ ctx.fillRect(0,0,w,h);
+
+ ctx.strokeStyle="#38bdf8";
+ ctx.setLineDash([15,15]);
+ ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,h);ctx.stroke();
+ ctx.setLineDash([]);
+
+ glowRect(paddle1.x,paddle1.y,paddle1.w,paddle1.h,"#22d3ee");
+ glowRect(paddle2.x,paddle2.y,paddle2.w,paddle2.h,"#f472b6");
+
+ glowCircle(ball.x,ball.y,ball.r,"#fff");
+
+ document.getElementById("score").innerHTML=
+ "🏓 "+score1+" : "+score2+" | "+mode.toUpperCase();
+}
+
+function hit(b,p){
+ return b.x+b.r>p.x&&b.x-b.r<p.x+p.w&&
+ b.y+b.r>p.y&&b.y-b.r<p.y+p.h;
+}
+
+function resetBall(){
+ ball.x=innerWidth/2;ball.y=innerHeight/2;
+ ball.vx=(Math.random()>.5?5:-5);
+ ball.vy=(Math.random()-.5)*7;
+}
+
+function pongTouch(e){
+ let y=e.clientY;
+ paddle1.y=y-paddle1.h/2;
+}
+canvas.addEventListener("pointermove",pongTouch);
+
+/* ================= POOL GAME ================= */
+
+let balls=[];
+let cue={x:0,y:0};
+let aim={x:0,y:0};
+let shooting=false;
+let power=0;
+
+function initPool(){
+ balls=[];
+ let cx=innerWidth/2,cy=innerHeight/2;
+
+ for(let i=0;i<10;i++){
+  let row=Math.floor(Math.sqrt(i));
+  balls.push({
+   x:cx+row*30,
+   y:cy+(i%3)*30,
+   vx:0,vy:0,
+   r:12,
+   color=["#facc15","#ef4444","#3b82f6","#fff","#22c55e"][i%5]
+  });
+ }
+
+ cue={x:cx-180,y:cy};
+ power=0;
+ score1=0;score2=0;
+}
+
+function drawPool(){
+ let w=innerWidth,h=innerHeight;
+
+ ctx.fillStyle="#071326";ctx.fillRect(0,0,w,h);
+
+ let tableW=Math.min(w-30,850);
+ let tableH=Math.min(h-130,470);
+
+ let x=(w-tableW)/2,y=(h-tableH)/2;
+
+ ctx.fillStyle="#5b341b";
+ ctx.fillRect(x-20,y-20,tableW+40,tableH+40);
+
+ ctx.fillStyle="#087f46";
+ ctx.fillRect(x,y,tableW,tableH);
+
+ // pockets
+ let pockets=[
+ [x,y],[x+tableW/2,y],[x+tableW,y],
+ [x,y+tableH],[x+tableW/2,y+tableH],[x+tableW,y+tableH]
+ ];
+
+ pockets.forEach(p=>{
+  ctx.fillStyle="#020617";
+  ctx.beginPath();ctx.arc(p[0],p[1],19,0,Math.PI*2);ctx.fill();
+ });
+
+ // Physics
+ balls.forEach(b=>{
+  b.x+=b.vx;b.y+=b.vy;
+  b.vx*=.985;b.vy*=.985;
+
+  if(Math.abs(b.vx)<.04)b.vx=0;
+  if(Math.abs(b.vy)<.04)b.vy=0;
+
+  if(b.x<x+b.r||b.x>x+tableW-b.r)b.vx*=-.9;
+  if(b.y<y+b.r||b.y>y+tableH-b.r)b.vy*=-.9;
+
+  balls.forEach(c=>{
+   if(b===c)return;
+   let dx=c.x-b.x,dy=c.y-b.y;
+   let d=Math.sqrt(dx*dx+dy*dy);
+
+   if(d<b.r+c.r&&d>0){
+    let a=Math.atan2(dy,dx);
+    let v=(b.vx-c.vx)*Math.cos(a)+(b.vy-c.vy)*Math.sin(a);
+    b.vx-=v*Math.cos(a);
+    b.vy-=v*Math.sin(a);
+    c.vx+=v*Math.cos(a);
+    c.vy+=v*Math.sin(a);
+   }
+  });
+
+  glowCircle(b.x,b.y,b.r,b.color);
+ });
+
+ glowCircle(cue.x,cue.y,12,"#ffffff");
+
+ // Aim line
+ ctx.strokeStyle="#ffffff88";
+ ctx.setLineDash([8,8]);
+ ctx.beginPath();
+ ctx.moveTo(cue.x,cue.y);
+ ctx.lineTo(aim.x,aim.y);
+ ctx.stroke();
+ ctx.setLineDash([]);
+
+ document.getElementById("score").innerHTML=
+ "🎱 Pool | Power: "+Math.round(power);
+
+ document.getElementById("controls").innerHTML=
+ `<input type="range" min="1" max="100" value="${power}"
+ oninput="power=+this.value">
+ <button onclick="shootPool()">Shoot</button>
+ <button onclick="resetPool()">Reset Table</button>`;
+}
+
+canvas.addEventListener("pointerdown",e=>{
+ if(game==="pool"){
+  aim.x=e.clientX;aim.y=e.clientY;
+ }
+});
+
+canvas.addEventListener("pointermove",e=>{
+ if(game==="pool"){
+  aim.x=e.clientX;aim.y=e.clientY;
+ }
+});
+
+function shootPool(){
+ let dx=cue.x-aim.x;
+ let dy=cue.y-aim.y;
+ let d=Math.sqrt(dx*dx+dy*dy)||1;
+
+ cue.vx=dx/d*power*.12;
+ cue.vy=dy/d*power*.12;
+
+ balls.unshift({
+  x:cue.x,y:cue.y,
+  vx:cue.vx,vy:cue.vy,
+  r:12,color:"#ffffff"
+ });
+}
+
+function resetPool(){initPool()}
+
+/* ================= NIGHT WEREWOLF ================= */
+
+let coins=0;
+let bedLevel=1;
+let gateLevel=1;
+let gateHP=100;
+let maxGateHP=100;
+let weaponLevel=0;
+let monsters=[];
+let wave=1;
+
+function initNight(){
+ coins=0;
+ bedLevel=1;
+ gateLevel=1;
+ weaponLevel=0;
+ gateHP=100;
+ maxGateHP=100;
+ monsters=[];
+ wave=1;
+
+ document.getElementById("controls").innerHTML=`
+ <button onclick="upgradeBed()">🛏️ Upgrade Bed</button>
+ <button onclick="upgradeGate()">🚪 Upgrade Gate</button>
+ <button onclick="buyWeapon()">➕ Weapon Slot</button>
+ <button onclick="upgradeWeapon()">⚔️ Upgrade Weapon</button>
+ `;
+}
+
+function upgradeBed(){
+ let cost=bedLevel*50;
+ if(coins>=cost){
+  coins-=cost;
+  bedLevel++;
+ }
+}
+
+function upgradeGate(){
+ let cost=gateLevel*70;
+ if(coins>=cost){
+  coins-=cost;
+  gateLevel++;
+  maxGateHP+=100;
+  gateHP=maxGateHP;
+ }
+}
+
+function buyWeapon(){
+ if(weaponLevel===0&&coins>=100){
+  coins-=100;
+  weaponLevel=1;
+ }
+}
+
+function upgradeWeapon(){
+ let cost=weaponLevel*100;
+ if(weaponLevel>0&&coins>=cost){
+  coins-=cost;
+  weaponLevel++;
+ }
+}
+
+function drawNight(){
+ let w=innerWidth,h=innerHeight;
+
+ ctx.fillStyle="#030712";ctx.fillRect(0,0,w,h);
+
+ // Room
+ ctx.fillStyle="#172033";
+ ctx.fillRect(w*.15,h*.12,w*.7,h*.75);
+
+ // Walls
+ ctx.strokeStyle="#64748b";
+ ctx.lineWidth=8;
+ ctx.strokeRect(w*.15,h*.12,w*.7,h*.75);
+
+ // Bed
+ ctx.fillStyle="#7c3aed";
+ ctx.fillRect(w*.3,h*.4,w*.18,h*.22);
+
+ ctx.fillStyle="#e9d5ff";
+ ctx.fillRect(w*.31,h*.41,w*.06,h*.06);
+
+ ctx.fillStyle="white";
+ ctx.font="18px Arial";
+ ctx.fillText("🛏️ BED LV "+bedLevel,w*.3,h*.36);
+
+ // Gate
+ ctx.fillStyle="#92400e";
+ ctx.fillRect(w*.52,h*.35,w*.12,h*.32);
+
+ ctx.fillStyle="#fbbf24";
+ ctx.fillRect(w*.57,h*.48,8,8);
+
+ ctx.fillStyle="white";
+ ctx.fillText("GATE LV "+gateLevel,w*.51,h*.32);
+
+ // Gate health
+ ctx.fillStyle="#7f1d1d";
+ ctx.fillRect(w*.5,h*.29,w*.16,10);
+
+ ctx.fillStyle="#22c55e";
+ ctx.fillRect(w*.5,h*.29,w*.16*(gateHP/maxGateHP),10);
+
+ // Weapon
+ if(weaponLevel>0){
+  glowCircle(w*.58,h*.4,12,
+  weaponLevel>3?"#facc15":"#38bdf8");
+
+  ctx.fillStyle="white";
+  ctx.fillText("⚔️ LV "+weaponLevel,w*.65,h*.4);
+ }else{
+  ctx.fillStyle="#38bdf8";
+  ctx.fillRect(w*.58,h*.4,30,30);
+  ctx.fillStyle="white";
+  ctx.fillText("+",w*.585,h*.425);
+ }
+
+ // Monsters
+ if(frame%180===0){
+  monsters.push({
+   x:w*.85,y:h*(.3+Math.random()*.4),
+   hp:50+wave*10,
+   speed:.3+wave*.04
+  });
+ }
+
+ monsters.forEach((m,i)=>{
+  m.x-=m.speed;
+
+  // Weapon auto attack
+  if(weaponLevel>0&&frame%30===0){
+   m.hp-=weaponLevel*5;
+  }
+
+  if(m.x<w*.64){
+   gateHP-=.2;
+  }
+
+  ctx.fillStyle="#7f1d1d";
+  ctx.beginPath();
+  ctx.arc(m.x,m.y,22,0,Math.PI*2);
+  ctx.fill();
+
+  glowCircle(m.x,m.y,10,"#ef4444");
+
+  if(m.hp<=0){
+   monsters.splice(i,1);
+   coins+=10;
+  }
+ });
+
+ // Coin income
+ if(frame%60===0){
+  coins+=bedLevel;
+ }
+
+ if(gateHP<=0){
+  textCenter("GAME OVER");
+  running=false;
+ }
+
+ if(frame%1200===0){
+  wave++;
+ }
+
+ document.getElementById("score").innerHTML=
+ "🌙 NIGHT WEREWOLF | Coins: "+coins+
+ " | Wave: "+wave+
+ " | Bed: "+bedLevel+
+ " | Weapon: "+weaponLevel+
+ " | Gate HP: "+Math.max(0,Math.round(gateHP));
+}
+
+/* ================= GRAPHICS ================= */
+
+function glowCircle(x,y,r,color){
+ ctx.save();
+ ctx.shadowBlur=20;
+ ctx.shadowColor=color;
+ ctx.fillStyle=color;
+ ctx.beginPath();
+ ctx.arc(x,y,r,0,Math.PI*2);
+ ctx.fill();
+ ctx.restore();
+}
+
+function glowRect(x,y,w,h,color){
+ ctx.save();
+ ctx.shadowBlur=20;
+ ctx.shadowColor=color;
+ ctx.fillStyle=color;
+ ctx.fillRect(x,y,w,h);
+ ctx.restore();
+}
+
+function textCenter(text){
+ ctx.fillStyle="#ffffff";
+ ctx.font="bold 40px Arial";
+ ctx.textAlign="center";
+ ctx.fillText(text,innerWidth/2,innerHeight/2);
+ ctx.textAlign="left";
+}
+
+/* ================= MULTIPLAYER ================= */
+
+let pc=null;
+let dc=null;
+
+function showConnection(){
+ document.getElementById("connection").style.display="block";
+}
+
+function closeConnection(){
+ document.getElementById("connection").style.display="none";
+}
+
+function createRoom(){
+ pc=new RTCPeerConnection({
+  iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+ });
+
+ dc=pc.createDataChannel("night-arcade");
+ setupDC();
+
+ pc.createOffer().then(async offer=>{
+  await pc.setLocalDescription(offer);
+  await waitICE();
+
+  let data=JSON.stringify(pc.localDescription);
+  document.getElementById("signal").value=data;
+  makeQR(data);
+ });
+
+ document.getElementById("msg").innerText=
+ "Room Created. Share Offer QR with Friend.";
+}
+
+function joinRoom(){
+ pc=new RTCPeerConnection({
+  iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+ });
+
+ pc.ondatachannel=e=>{
+  dc=e.channel;
+  setupDC();
+ };
+
+ document.getElementById("msg").innerText=
+ "Paste Host Offer and click Process Code.";
+}
+
+async function processSignal(){
+ if(!pc)return;
+
+ let data=JSON.parse(document.getElementById("signal").value);
+
+ if(data.type==="offer"){
+  await pc.setRemoteDescription(data);
+
+  let answer=await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await waitICE();
+
+  let result=JSON.stringify(pc.localDescription);
+  document.getElementById("signal").value=result;
+  makeQR(result);
+
+  document.getElementById("msg").innerText=
+  "Answer Created. Send QR to Host.";
+ }
+ else if(data.type==="answer"){
+  await pc.setRemoteDescription(data);
+
+  document.getElementById("msg").innerText=
+  "Connection Established!";
+ }
+}
+
+function setupDC(){
+ dc.onopen=()=>{
+  document.getElementById("msg").innerText="Connected!";
+ };
+
+ dc.onmessage=e=>{
+  let data=JSON.parse(e.data);
+
+  if(data.type==="pong"){
+   score1=data.a;score2=data.b;
+  }
+ };
+}
+
+function waitICE(){
+ return new Promise(resolve=>{
+  if(pc.iceGatheringState==="complete"){
+   resolve();return;
+  }
+
+  pc.onicegatheringstatechange=()=>{
+   if(pc.iceGatheringState==="complete")resolve();
+  };
+
+  setTimeout(resolve,5000);
+ });
+}
+
+function makeQR(text){
+ document.getElementById("qr").innerHTML="";
+
+ if(window.QRCode){
+  new QRCode(document.getElementById("qr"),{
+   text:text,width:200,height:200
+  });
+ }
+}
+
+async function scanQR(){
+ if(!("BarcodeDetector" in window)){
+  alert("QR Scanner is not supported. Paste code manually.");
+  return;
+ }
+
+ let video=document.getElementById("video");
+ video.style.display="block";
+
+ let stream=await navigator.mediaDevices.getUserMedia({
+  video:{facingMode:"environment"}
+ });
+
+ video.srcObject=stream;
+
+ let detector=new BarcodeDetector({formats:["qr_code"]});
+
+ let scanning=setInterval(async()=>{
+  let codes=await detector.detect(video);
+
+  if(codes.length){
+   document.getElementById("signal").value=codes[0].rawValue;
+   clearInterval(scanning);
+
+   stream.getTracks().forEach(t=>t.stop());
+   video.style.display="none";
+  }
+ },500);
+}
+</script>
+
+</body>
+  </html>
